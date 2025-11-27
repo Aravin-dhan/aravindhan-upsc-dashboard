@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -16,9 +17,9 @@ const statusColors = {
 };
 
 export const SyllabusAtlas = () => {
-    const { syllabus, updateSyllabusStatus, revisions, bookmarks, toggleBookmark } = useDashboard();
-    const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
-    const [focusTopicId, setFocusTopicId] = useState<string | null>(null);
+    const { syllabus, updateSyllabusStatus, revisions, bookmarks, addBookmark, removeBookmark } = useDashboard();
+    const [selectedTopic, setSelectedTopic] = useState<{ id: string; title: string } | null>(null);
+    const [focusTopic, setFocusTopic] = useState<{ id: string; title: string } | null>(null);
 
     const isRevisionDue = (topicId: string) => {
         const today = new Date().toISOString().split('T')[0];
@@ -27,7 +28,20 @@ export const SyllabusAtlas = () => {
 
     const renderTopic = (topic: SyllabusTopic, depth = 0) => {
         const hasSubtopics = topic.subtopics && topic.subtopics.length > 0;
-        const isBookmarked = bookmarks.includes(topic.id);
+        const isBookmarked = bookmarks.some(b => b.id === topic.id);
+
+        const handleBookmarkClick = () => {
+            if (isBookmarked) {
+                removeBookmark(topic.id);
+            } else {
+                addBookmark({
+                    id: topic.id,
+                    title: topic.title,
+                    link: `/syllabus/${topic.id}`, // Mock link
+                    source: 'Syllabus'
+                });
+            }
+        };
 
         return (
             <Accordion.Item value={topic.id} key={topic.id} className={`border-b border-stone-100 dark:border-slate-800 last:border-0 ${depth > 0 ? 'ml-4' : ''}`}>
@@ -56,7 +70,7 @@ export const SyllabusAtlas = () => {
 
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button
-                            onClick={() => toggleBookmark(topic.id)}
+                            onClick={handleBookmarkClick}
                             className={`p-1.5 rounded-md transition-colors ${isBookmarked ? 'text-amber-600 bg-amber-50 dark:text-amber-400 dark:bg-amber-900/20' : 'text-stone-400 hover:text-amber-600 hover:bg-amber-50 dark:text-slate-500 dark:hover:text-amber-400 dark:hover:bg-amber-900/20'}`}
                             title={isBookmarked ? "Remove Bookmark" : "Bookmark Topic"}
                         >
@@ -64,7 +78,7 @@ export const SyllabusAtlas = () => {
                         </button>
 
                         <button
-                            onClick={() => setFocusTopicId(topic.id)}
+                            onClick={() => setFocusTopic({ id: topic.id, title: topic.title })}
                             className="p-1.5 text-stone-400 hover:text-indigo-600 hover:bg-indigo-50 dark:text-slate-500 dark:hover:text-indigo-400 dark:hover:bg-indigo-900/20 rounded-md transition-colors"
                             title="Start Focus Session"
                         >
@@ -72,7 +86,7 @@ export const SyllabusAtlas = () => {
                         </button>
 
                         <button
-                            onClick={() => setSelectedTopicId(topic.id)}
+                            onClick={() => setSelectedTopic({ id: topic.id, title: topic.title })}
                             className="p-1.5 text-stone-400 hover:text-amber-600 hover:bg-amber-50 dark:text-slate-500 dark:hover:text-amber-400 dark:hover:bg-amber-900/20 rounded-md transition-colors"
                             title="Open Notebook"
                         >
@@ -121,19 +135,19 @@ export const SyllabusAtlas = () => {
                 </Accordion.Root>
             </div>
 
-            {selectedTopicId && (
+            {selectedTopic && (
                 <TopicNotebook
-                    topicId={selectedTopicId}
-                    isOpen={!!selectedTopicId}
-                    onClose={() => setSelectedTopicId(null)}
+                    topicId={selectedTopic.id}
+                    topicTitle={selectedTopic.title}
+                    onClose={() => setSelectedTopic(null)}
                 />
             )}
 
-            {focusTopicId && (
+            {focusTopic && (
                 <FocusTimer
-                    topicId={focusTopicId}
-                    isOpen={!!focusTopicId}
-                    onClose={() => setFocusTopicId(null)}
+                    topicId={focusTopic.id}
+                    topicTitle={focusTopic.title}
+                    onClose={() => setFocusTopic(null)}
                 />
             )}
         </div>

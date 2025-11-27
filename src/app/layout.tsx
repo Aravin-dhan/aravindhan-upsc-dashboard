@@ -3,6 +3,7 @@ import './globals.css';
 import { Inter } from 'next/font/google';
 import { ReactNode } from 'react';
 import Background from '@/components/Background';
+import { Navigation } from '@/components/Navigation';
 
 import { DashboardProvider } from '@/context/DashboardContext';
 
@@ -16,11 +17,12 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} bg-backgroundStart text-foreground min-h-screen flex flex-col`}>
+      <body className={`${inter.className} bg-backgroundStart text-foreground min-h-screen flex flex-col`} suppressHydrationWarning>
         {/* Background Texture */}
         <Background />
         {/* Main content */}
         <DashboardProvider>
+          <Navigation />
           <div className="relative z-10 flex-1 w-full max-w-[95%] mx-auto p-4">
             {children}
           </div>

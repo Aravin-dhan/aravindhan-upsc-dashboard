@@ -47,6 +47,31 @@ export interface FocusSession {
     date: string; // ISO Date
 }
 
+export interface Flashcard {
+    id: string;
+    deckId: string;
+    front: string;
+    back: string;
+    lastReviewed?: string;
+    status: 'new' | 'learning' | 'mastered';
+}
+
+export interface Deck {
+    id: string;
+    title: string;
+    description?: string;
+    cards: Flashcard[];
+}
+
+export interface Bookmark {
+    id: string;
+    title: string;
+    link: string;
+    date: string;
+    note?: string;
+    source?: string;
+}
+
 interface DashboardState {
     syllabus: SyllabusTopic[];
     habits: Habit[];
@@ -54,7 +79,8 @@ interface DashboardState {
     revisions: Revision[];
     resources: Resource[];
     focusSessions: FocusSession[];
-    bookmarks: string[];
+    bookmarks: Bookmark[];
+    decks: Deck[];
 }
 
 interface DashboardContextType extends DashboardState {
@@ -74,7 +100,14 @@ interface DashboardContextType extends DashboardState {
     deleteResource: (id: string) => void;
     logFocusSession: (topicId: string, duration: number) => void;
     // Bookmarks
-    toggleBookmark: (topicId: string) => void;
+    addBookmark: (bookmark: Omit<Bookmark, 'id' | 'date'> & { id?: string }) => void;
+    removeBookmark: (id: string) => void;
+    updateBookmark: (id: string, updates: Partial<Bookmark>) => void;
+    // Flashcards
+    addDeck: (title: string) => void;
+    deleteDeck: (id: string) => void;
+    addFlashcard: (deckId: string, card: Omit<Flashcard, 'id' | 'deckId' | 'status'>) => void;
+    updateFlashcardStatus: (deckId: string, cardId: string, status: Flashcard['status']) => void;
 }
 
 // --- Initial Data ---
@@ -268,7 +301,8 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     const [revisions, setRevisions] = useState<Revision[]>([]);
     const [resources, setResources] = useState<Resource[]>([]);
     const [focusSessions, setFocusSessions] = useState<FocusSession[]>([]);
-    const [bookmarks, setBookmarks] = useState<string[]>([]);
+    const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+    const [decks, setDecks] = useState<Deck[]>([]);
     const [isLoaded, setIsLoaded] = useState(false);
 
     // Load from LocalStorage
@@ -285,7 +319,28 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
                 if (parsed.revisions) setRevisions(parsed.revisions);
                 if (parsed.resources) setResources(parsed.resources);
                 if (parsed.focusSessions) setFocusSessions(parsed.focusSessions);
-                if (parsed.bookmarks) setBookmarks(parsed.bookmarks);
+                if (parsed.decks) setDecks(parsed.decks);
+
+                // Migration for bookmarks
+                if (parsed.bookmarks) {
+                    if (Array.isArray(parsed.bookmarks)) {
+                        if (parsed.bookmarks.length > 0 && typeof parsed.bookmarks[0] === 'string') {
+                            const migrated = parsed.bookmarks.map((link: string) => ({
+                                id: link,
+                                title: 'Legacy Bookmark',
+                                link: link,
+                                date: new Date().toISOString()
+                            }));
+                            setBookmarks(migrated);
+                        } else {
+                            setBookmarks(parsed.bookmarks);
+                        }
+                    } else {
+                        setBookmarks([]);
+                    }
+                } else {
+                    setBookmarks([]);
+                }
             } catch (e) {
                 console.error("Failed to load dashboard data", e);
             }
@@ -297,10 +352,10 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         if (isLoaded) {
             localStorage.setItem('upsc-dashboard-v1', JSON.stringify({
-                syllabus, habits, tasks, revisions, resources, focusSessions, bookmarks
+                syllabus, habits, tasks, revisions, resources, focusSessions, bookmarks, decks
             }));
         }
-    }, [syllabus, habits, tasks, revisions, resources, focusSessions, bookmarks, isLoaded]);
+    }, [syllabus, habits, tasks, revisions, resources, focusSessions, bookmarks, decks, isLoaded]);
 
     // Actions
 
@@ -371,12 +426,21 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         setFocusSessions(prev => [...prev, session]);
     };
 
-    const toggleBookmark = (topicId: string) => {
-        setBookmarks(prev =>
-            prev.includes(topicId)
-                ? prev.filter(id => id !== topicId)
-                : [...prev, topicId]
-        );
+    const addBookmark = (bookmark: Omit<Bookmark, 'id' | 'date'> & { id?: string }) => {
+        const newBookmark: Bookmark = {
+            ...bookmark,
+            id: bookmark.id || Date.now().toString(),
+            date: new Date().toISOString()
+        };
+        setBookmarks(prev => [...prev, newBookmark]);
+    };
+
+    const removeBookmark = (id: string) => {
+        setBookmarks(prev => prev.filter(b => b.id !== id && b.link !== id)); // Handle both ID and Link for legacy
+    };
+
+    const updateBookmark = (id: string, updates: Partial<Bookmark>) => {
+        setBookmarks(prev => prev.map(b => b.id === id ? { ...b, ...updates } : b));
     };
 
     const addHabit = (name: string) => {
@@ -418,13 +482,48 @@ export function DashboardProvider({ children }: { children: ReactNode }) {
         setTasks(prev => prev.map(t => t.id === id ? { ...t, text } : t));
     };
 
+    const addDeck = (title: string) => {
+        const newDeck: Deck = { id: Date.now().toString(), title, cards: [] };
+        setDecks(prev => [...prev, newDeck]);
+    };
+
+    const deleteDeck = (id: string) => {
+        setDecks(prev => prev.filter(d => d.id !== id));
+    };
+
+    const addFlashcard = (deckId: string, card: Omit<Flashcard, 'id' | 'deckId' | 'status'>) => {
+        const newCard: Flashcard = {
+            ...card,
+            id: Date.now().toString(),
+            deckId,
+            status: 'new'
+        };
+        setDecks(prev => prev.map(deck =>
+            deck.id === deckId
+                ? { ...deck, cards: [...deck.cards, newCard] }
+                : deck
+        ));
+    };
+
+    const updateFlashcardStatus = (deckId: string, cardId: string, status: Flashcard['status']) => {
+        setDecks(prev => prev.map(deck =>
+            deck.id === deckId
+                ? {
+                    ...deck,
+                    cards: deck.cards.map(c => c.id === cardId ? { ...c, status, lastReviewed: new Date().toISOString() } : c)
+                }
+                : deck
+        ));
+    };
+
     return (
         <DashboardContext.Provider value={{
-            syllabus, habits, tasks, revisions, resources, focusSessions, bookmarks,
+            syllabus, habits, tasks, revisions, resources, focusSessions, bookmarks, decks,
             updateSyllabusStatus, addHabit, deleteHabit, toggleHabit,
             addTask, toggleTask, deleteTask, updateTask,
             scheduleRevision, completeRevision, addResource, updateResource, deleteResource, logFocusSession,
-            toggleBookmark
+            addBookmark, removeBookmark, updateBookmark,
+            addDeck, deleteDeck, addFlashcard, updateFlashcardStatus
         }}>
             {children}
         </DashboardContext.Provider>
